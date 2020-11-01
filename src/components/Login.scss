@@ -1,0 +1,29 @@
+.login {
+  background-color: white;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+
+  &__logo {
+    display: flex;
+    flex-direction: column;
+
+    & > img {
+      object-fit: contain;
+      height: 80px;
+      margin: 15px;
+    }
+  }
+
+  &__button {
+      width: 300px;
+      background-color:  #2e81f4 !important;
+      color: #eff2f5 !important;
+      font-weight: 800;
+
+      &:hover{
+          background-color: white !important;
+          color: #2e81f4 !important;
+      }
+  }
+}
