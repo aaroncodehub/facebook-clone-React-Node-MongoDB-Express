@@ -4,28 +4,65 @@ import VideocamIcon from "@material-ui/icons/Videocam";
 import PhotoLibraryIcon from "@material-ui/icons/PhotoLibrary";
 import MoodIcon from "@material-ui/icons/Mood";
 import { useStateValue } from "../contextAPI/StateProvider";
-import db from "../firebase";
-import firebase from 'firebase/app';
+import axios from "../axios";
 import "./MessageSender.scss";
 
 const MessageSender = () => {
   const [{ user }] = useStateValue();
   const [input, setInput] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [image, setImage] = useState(null);
 
-  const handleSubmit = (e) => {
+
+  const handleChange = (e) => {
     e.preventDefault();
-    db.collection("facebook").add({
-      message: input,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-      profilePic: user.photoURL,
-      image: imageUrl,
-      username: user.displayName,
-    });
+    if (e.target.files[0]) {
+      setImage(e.target.files[0]);
+    }
+    };
+    const savePost = async (postData) => {
+        await axios.post('/upload/post', postData)
+            .then(res => {
+            console.log(res)
+        })
+}
+
+  const handleSubmit = async (e) => {
+    if (image) {
+      const imgForm = new FormData();
+      imgForm.append("file", image, image.name);
+      axios
+        .post("/upload/image", imgForm, {
+          headers: {
+            accept: "application/json",
+            "Accept-Language": "en-US,en;q=0.8",
+            "Content-Type": `multipart/form-data;boundary=${imgForm._boundary}`,
+          },
+        })
+        .then((res) => {
+          console.log(res.data);
+          const postData = {
+            text: input,
+            imgName: res.data.filename,
+            user: user.displayName,
+            avatar: user.photoURL,
+            timestamp: Date.now(),
+          };
+          savePost(postData);
+        });
+    } else {
+      const postData = {
+        text: input,
+        user: user.displayName,
+        avatar: user.photoURL,
+        timestamp: Date.now(),
+      };
+      savePost(postData);
+    }
+    setImage(null);
     setInput("");
-    setImageUrl("");
   };
 
+    
   return (
     <div className="messageSender">
       <div className="messageSender__top">
@@ -38,12 +75,7 @@ const MessageSender = () => {
             className="messageSender__input"
             placeholder={`what's on your mind ${user.displayName} ?`}
           />
-          <input
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            type="text"
-            placeholder="image URL (Optional)"
-          />
+          <input type="file" onChange={handleChange} />
           <button type="submit" onClick={handleSubmit}>
             Hidden button
           </button>

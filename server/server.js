@@ -6,11 +6,20 @@ const GridsStorage = require("multer-gridfs-storage");
 const Grid = require("gridfs-stream");
 const bodyParser = require("body-parser");
 const path = require("path");
-const Pubsher = require("pusher");
+const Pusher = require("pusher");
 
-const mongoPosts = require("./mongoPosts");
+const mongoPosts = require("./postsModel");
 
 Grid.mongo = mongoose.mongo;
+
+// pusher config
+const pusher = new Pusher({
+  appId: "1100558",
+  key: "cdf43416aafbcf93fc2c",
+  secret: "c9ff5d51c375a1a900a2",
+  cluster: "ap4",
+  useTLS: true
+});
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -18,19 +27,33 @@ const port = process.env.PORT || 8000;
 app.use(bodyParser.json());
 app.use(cors());
 
+// db config
+const options = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useCreateIndex: true,
+}
 const DB_CONNECT =
   "mongodb+srv://db-admin:DBadmin@cluster0.y2qlt.mongodb.net/facebook?retryWrites=true&w=majority";
-const conn = mongoose.createConnection(DB_CONNECT, {
-  useCreateIndex: true,
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+
+
+const conn = mongoose.createConnection(DB_CONNECT,options);
+mongoose.connect(DB_CONNECT, options);
+
+mongoose.connection.once("open", () => {
+  console.log('DB connected')
+  const changeStream = mongoose.connection.collection('posts').watch()
+  changeStream.on('change', (change) => {
+    if (change.operationType === 'insert') {
+      // trigger an event named INSERTED to channel named POSTS
+      pusher.trigger('posts', 'inserted', {
+        change: change
+      })
+    } else {
+      console.log('Error triggering pusher')
+    }
+  })
 });
-mongoose.connect(DB_CONNECT, {
-  useCreateIndex: true,
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-mongoose.connection.once("open", () => console.log("db connected"));
 
 let gfs;
 conn.once("open", () => {
@@ -84,6 +107,8 @@ app.get('/retrieve/posts', (req,res) => {
     }
   })
 })
+
+// http://localhost:8000/retrieve/image/single?name=image-1604205138108.jpeg to get the image
 
 app.get("/retrieve/image/single", (req, res) => {
   gfs.files.findOne({ filename: req.query.name }, (err, file) => {
