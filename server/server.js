@@ -12,7 +12,7 @@ const mongoPosts = require("./postsModel");
 
 Grid.mongo = mongoose.mongo;
 
-// pusher config
+// pusher config , put it into .env in production
 const pusher = new Pusher({
   appId: "1100558",
   key: "cdf43416aafbcf93fc2c",
@@ -24,6 +24,7 @@ const pusher = new Pusher({
 const app = express();
 const port = process.env.PORT || 8000;
 
+// middleware config
 app.use(bodyParser.json());
 app.use(cors());
 
@@ -32,16 +33,26 @@ const options = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   useCreateIndex: true,
+  useFindAndModify: false,
+  autoIndex: false, // Don't build indexes
+  poolSize: 10, // Maintain up to 10 socket connections
+  serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+  socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+  family: 4 // Use IPv4, skip trying IPv6
 }
+
+// will put it into .env in production
 const DB_CONNECT =
   "mongodb+srv://db-admin:DBadmin@cluster0.y2qlt.mongodb.net/facebook?retryWrites=true&w=majority";
 
+// multiple connections for different databases, the default one is mongoose.connection
 
 const conn = mongoose.createConnection(DB_CONNECT,options);
-mongoose.connect(DB_CONNECT, options);
+mongoose.connect(DB_CONNECT, options).catch(err => console.log(err));
 
-mongoose.connection.once("open", () => {
-  console.log('DB connected')
+mongoose.connection
+  .once("open", () => {
+  console.log('Default DB connected')
   const changeStream = mongoose.connection.collection('posts').watch()
   changeStream.on('change', (change) => {
     if (change.operationType === 'insert') {
@@ -53,11 +64,16 @@ mongoose.connection.once("open", () => {
       console.log('Error triggering pusher')
     }
   })
-});
+  })
+  .on('error', function (err) {
+    console.log('connecting to MongoDB' + err)
+  })
+  ;
+
 
 let gfs;
 conn.once("open", () => {
-  console.log("DB connected");
+  console.log("GFS DB connected");
   gfs = Grid(conn.db, mongoose.mongo);
   gfs.collection("images");
 });
@@ -75,12 +91,16 @@ const storage = new GridsStorage({
     });
   },
 });
+
+//Multer adds a body object and a file or files object to the request object. 
+//The body object contains the values of the text fields of the form, the file or files object contains the files uploaded via the form.
 const upload = multer({ storage });
 
 app.get("/", (req, res) =>
   res.status(200).send("facebook server is up and running")
 );
 
+//req.file is the name of your file in the form
 app.post("/upload/image", upload.single("file"), (req, res) => {
   res.status(201).send(req.file);
 });
@@ -98,12 +118,12 @@ app.post("/upload/post", (req, res) => {
 app.get('/retrieve/posts', (req,res) => {
   mongoPosts.find((err,data) =>{
     if(err) {
-      res.status(500).send(err)
+     return res.status(500).send(err)
     } else {
       data.sort((b,a) => {
         return a.timestamp - b.timestamp
       })
-      res.status(200).send(data)
+     return res.status(200).send(data)
     }
   })
 })
